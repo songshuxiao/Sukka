@@ -11,7 +11,7 @@ $this->need('header.php');
                 <?php while ($this->next()) : ?>
                     <div class="card">
                         <a aria-label="缩略图" class="card-image thumb-index" href="<?php $this->permalink() ?>">
-                            <img alt="<?php $this->title() ?>" src="<?php $this->options->themeUrl("assets/img/lazyload.jpg")
+                            <img alt="<?php $this->title() ?>" src="<?php $this->options->themeUrl("assets/img/lazyload.gif")
                                                                     ?>" class="thumb-img" data-original="<?php echo thumbside($this); ?>">
 
                         </a>

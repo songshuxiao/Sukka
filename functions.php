@@ -1,20 +1,252 @@
 <?php
-//github 图床地址：https://cdn.jsdelivr.net/gh/MrSeaning/blogImg/图片路径
+/**
+ * Sukka 主题核心函数
+ * 兼容 Typecho 1.3.0 + PHP 8.4
+ *
+ * @package Sukka
+ */
 
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
-// 主题初始化
+use Typecho\Db;
+use Typecho\Widget;
+use Typecho\Date;
+use Typecho\Cookie;
+use Typecho\Validate;
+use Typecho\Exception;
+use Typecho\Widget\Helper\Form\Element\Text;
+use Typecho\Widget\Helper\Form\Element\Textarea;
+use Typecho\Widget\Helper\Form\Element\Radio;
+
+/**
+ * 主题初始化
+ */
 function themeInit($archive)
 {
-    // 判断是否是添加评论的操作
-    // 为文章或页面、post操作，且包含参数`themeAction=comment`(自定义)
+    // Ajax 评论处理
     if ($archive->is('single') && $archive->request->isPost() && $archive->request->is('themeAction=comment')) {
-        // 为添加评论的操作时
         ajaxComment($archive);
     }
 }
 
+/**
+ * 主题配置
+ */
+function themeConfig($form)
+{
+    $logoText = new Text('logoText', null, 'Mr.Seaning', _t('站点标识文字'), _t('显示在导航栏左侧的文字'));
+    $form->addInput($logoText);
 
-//页面加载时间
+    $authorName = new Text('authorName', null, 'Mr.Seaning', _t('博主昵称'), _t('侧边栏显示的博主名称'));
+    $form->addInput($authorName);
+
+    $authorDesc = new Text('authorDesc', null, '一入IT深思海，从此妹子是路人', _t('博主描述'), _t('侧边栏显示的博主一句话描述'));
+    $form->addInput($authorDesc);
+
+    $avatarUrl = new Text('avatarUrl', null, null, _t('博主头像地址'), _t('留空则使用主题默认头像'));
+    $form->addInput($avatarUrl);
+
+    $alipayQr = new Text('alipayQr', null, null, _t('支付宝打赏二维码图片地址'), _t('在文章页打赏按钮弹窗中显示，留空则不显示支付宝选项'));
+    $form->addInput($alipayQr);
+
+    $wechatQr = new Text('wechatQr', null, null, _t('微信打赏二维码图片地址'), _t('在文章页打赏按钮弹窗中显示，留空则不显示微信选项'));
+    $form->addInput($wechatQr);
+
+    $donationText = new Textarea('donationText', null, '喜欢这篇文章？为什么不考虑打赏一下作者呢？', _t('打赏提示文字'), _t('文章页打赏区域的提示文字'));
+    $form->addInput($donationText);
+
+    $icp = new Text('icp', null, null, _t('ICP 备案号'), _t('留空则不显示'));
+    $form->addInput($icp);
+
+    $policeIcp = new Text('policeIcp', null, null, _t('公安备案号'), _t('留空则不显示'));
+    $form->addInput($policeIcp);
+
+    $policeIcpUrl = new Text('policeIcpUrl', null, null, _t('公安备案链接'), _t('公安备案号跳转链接，留空则使用默认链接'));
+    $form->addInput($policeIcpUrl);
+
+    $randomImgCdn = new Text('randomImgCdn', null, 'https://cdn.jsdelivr.net/gh/MrSeaning/blogImg/randimg/', _t('随机图片 CDN 地址'), _t('用于文章列表缩略图，图片命名格式为 img1.jpg, img2.jpg ...'));
+    $form->addInput($randomImgCdn);
+
+    $enableHighlight = new Radio(
+        'enableHighlight',
+        array('1' => _t('启用'), '0' => _t('禁用')),
+        '1',
+        _t('代码高亮'),
+        _t('使用 highlight.js 实现代码高亮')
+    );
+    $form->addInput($enableHighlight);
+
+    $enableToc = new Radio(
+        'enableToc',
+        array('1' => _t('启用'), '0' => _t('禁用')),
+        '1',
+        _t('文章目录'),
+        _t('在文章页侧边栏显示文章目录')
+    );
+    $form->addInput($enableToc);
+
+    echo '<div style="background:#f5f5f5;padding:15px;border-radius:5px;margin:10px 0;">
+    <h3>Sukka 主题</h3>
+    <p>本主题已适配 Typecho 1.3.0 + PHP 8.4</p>
+    <p>支持功能：搜索、打赏、评论、夜间/明亮模式切换、文章目录、代码高亮/复制</p>
+    </div>';
+}
+
+/**
+ * 文章自定义字段
+ */
+function themeFields($layout)
+{
+    $img = new Text('img', null, null, _t('文章缩略图'), _t('在这里填入文章缩略图地址，留空则使用随机图片'));
+    $layout->addItem($img);
+}
+
+/**
+ * Gravatar 头像 URL（兼容 Typecho 1.3.0）
+ * 替代已废弃的 Typecho_Common::gravatarUrl
+ */
+function getGravatarUrl($mail, $size, $rating, $isSecure)
+{
+    $url = $isSecure ? 'https://secure.gravatar.com' : 'http://www.gravatar.com';
+    $hash = md5(strtolower($mail));
+    return $url . '/avatar/' . $hash . '?s=' . $size . '&r=' . $rating . '&d=mm';
+}
+
+/**
+ * 计算文章字数
+ */
+function art_count($cid)
+{
+    $db = Db::get();
+    $rs = $db->fetchRow($db->select('table.contents.text')->from('table.contents')->where('table.contents.cid = ?', $cid)->order('table.contents.cid', Db::SORT_ASC)->limit(1));
+    $text = preg_replace("/[^\x{4e00}-\x{9fa5}]/u", "", $rs['text']);
+    echo mb_strlen($text, 'UTF-8');
+}
+
+/**
+ * 计算阅读时间
+ */
+function art_time($cid)
+{
+    $db = Db::get();
+    $rs = $db->fetchRow($db->select('table.contents.text')->from('table.contents')->where('table.contents.cid = ?', $cid)->order('table.contents.cid', Db::SORT_ASC)->limit(1));
+    $text = preg_replace("/[^\x{4e00}-\x{9fa5}]/u", "", $rs['text']);
+    $count = mb_strlen($text, 'UTF-8');
+    echo ceil($count / 400);
+}
+
+/**
+ * 判断文章是否过期（超过30天）
+ */
+function timeZoneold($time)
+{
+    $timeStamp = $time;
+    $date = new Date($timeStamp);
+    $now = new Date();
+    $diff = $now->timeStamp - $timeStamp;
+    return $diff > (30 * 24 * 60 * 60);
+}
+
+/**
+ * 获取文章缩略图
+ */
+function thumbside($article)
+{
+    $options = Widget::widget('Widget_Options');
+    $cdn = $options->randomImgCdn ? $options->randomImgCdn : 'https://cdn.jsdelivr.net/gh/MrSeaning/blogImg/randimg/';
+
+    // 优先使用自定义字段
+    if (isset($article->fields->img) && $article->fields->img != "") {
+        return $article->fields->img;
+    }
+
+    // 尝试从文章内容中提取第一张图片
+    $content = $article->content;
+    $pattern = '/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/i';
+    if (preg_match($pattern, $content, $matches)) {
+        return $matches[1];
+    }
+
+    // 使用随机图片
+    $rand_num = 42;
+    return $cdn . mt_rand(1, $rand_num) . ".jpg";
+    
+}
+
+/**
+ * 上一篇文章
+ */
+function thePrev($archive)
+{
+    $db = Db::get();
+    $cid = $archive->cid;
+    $created = $archive->created;
+
+    $rs = $db->fetchRow($db->select('cid', 'title', 'slug', 'type', 'status')->from('table.contents')
+        ->where('type = ?', 'post')
+        ->where('status = ?', 'publish')
+        ->where('created < ?', $created)
+        ->order('created', Db::SORT_DESC)
+        ->limit(1));
+
+    if ($rs) {
+        $url = buildPermalink($rs);
+        echo '<a class="nav-link" href="' . $url . '"><span class="nav-direction">上一篇</span><br><span class="nav-title">' . htmlspecialchars($rs['title']) . '</span></a>';
+    } else {
+        echo '<span class="nav-empty">没有更早的文章了</span>';
+    }
+}
+
+/**
+ * 下一篇文章
+ */
+function theNext($archive)
+{
+    $db = Db::get();
+    $cid = $archive->cid;
+    $created = $archive->created;
+
+    $rs = $db->fetchRow($db->select('cid', 'title', 'slug', 'type', 'status')->from('table.contents')
+        ->where('type = ?', 'post')
+        ->where('status = ?', 'publish')
+        ->where('created > ?', $created)
+        ->order('created', Db::SORT_ASC)
+        ->limit(1));
+
+    if ($rs) {
+        $url = buildPermalink($rs);
+        echo '<a class="nav-link" href="' . $url . '"><span class="nav-direction">下一篇</span><br><span class="nav-title">' . htmlspecialchars($rs['title']) . '</span></a>';
+    } else {
+        echo '<span class="nav-empty">没有更新的文章了</span>';
+    }
+}
+
+/**
+ * 生成文章永久链接（兼容 Typecho 1.3.0）
+ */
+function buildPermalink($post)
+{
+    $options = Widget::widget('Widget_Options');
+    $siteUrl = $options->siteUrl;
+    
+    // 尝试使用路由系统生成 URL
+    try {
+        $router = \Typecho\Router::getInstance();
+        $path = $router->url('post', $post);
+        // 如果返回的是完整 URL 则直接使用
+        if (strpos($path, 'http') === 0) {
+            return $path;
+        }
+        return $siteUrl . ltrim($path, '/');
+    } catch (\Throwable $e) {
+        // 降级方案：使用 cid 构建 URL
+        return $siteUrl . 'archives/' . $post['cid'] . '/';
+    }
+}
+
+/**
+ * 页面加载计时
+ */
 function timer_start()
 {
     global $timestart;
@@ -22,7 +254,7 @@ function timer_start()
     $timestart = $mtime[1] + $mtime[0];
     return true;
 }
-timer_start();
+
 function timer_stop($display = 0, $precision = 3)
 {
     global $timestart, $timeend;
@@ -30,284 +262,112 @@ function timer_stop($display = 0, $precision = 3)
     $timeend = $mtime[1] + $mtime[0];
     $timetotal = $timeend - $timestart;
     $r = number_format($timetotal, $precision);
-    if ($display)
+    if ($display) {
         echo $r;
+    }
     return $r;
 }
 
-//标签云
-function randTags()
-{
-    $fs = array("1.13rem", "1rem", "1.25rem", "1.38rem", "1.63rem", "1.88rem", "2rem"); //标签文字大小
-    $color = array("#5d677d", "#6a7387", "#848c9b", "#778091"); //标签颜色
-
-    $i = mt_rand(0, 6);
-    $j = mt_rand(0, 3);
-
-    $style = "font-size:" . $fs[$i] . ";color:" . $color[$j] . ";";
-    return $style;
-}
-
-//特色图设置
-if ($_SERVER['SCRIPT_NAME'] == "/admin/write-post.php") {
-    function themeFields($layout)
-    {
-        $img = new Typecho_Widget_Helper_Form_Element_Text('img', NULL, NULL, _t('文章特色图'), _t('在这里填入一个图片URL地址'));
-        $layout->addItem($img);
-    }
-}
-
-/* 判断文章写完的日期超过30天给出提示 */
-function timeZoneold($from)
-{
-    $now = new Typecho_Date(Typecho_Date::gmtTime());
-    return $now->timeStamp - $from > 720 * 60 * 60 ? true : false;
-}
-
-//统计文章字数
-function art_count($cid)
-{
-    $db = Typecho_Db::get();
-    $rs = $db->fetchRow($db->select('table.contents.text')->from('table.contents')->where('table.contents.cid=?', $cid)->order('table.contents.cid', Typecho_Db::SORT_ASC)->limit(1));
-    return mb_strlen($rs['text'], 'UTF-8');
-}
-
-//Typecho调用自定义字段值显示特色图，无图显示随机图
-function thumbside($article)
-{
-    if (!isset($article->fields->img) && $article->fields->img != "") {
-        return $article->fields->img;
-    } else {
-        $rand_num = 42;
-        return 'https://cdn.jsdelivr.net/gh/MrSeaning/blogImg/randimg/' . mt_rand(1, $rand_num) . ".jpg";
-    }
-}
-
-//文章阅读时间统计
-function art_time($cid)
-{
-    $text_word = art_count($cid);
-    return ceil($text_word / 400);
-}
-
+timer_start();
 /**
- * 显示下一篇
- *
- * @access public
- * @param string $default 如果没有下一篇,显示的默认文字
- * @return void
- */
-function theNext($widget, $default = NULL)
-{
-    $db = Typecho_Db::get();
-    $sql = $db->select()->from('table.contents')
-        ->where('table.contents.created > ?', $widget->created)
-        ->where('table.contents.status = ?', 'publish')
-        ->where('table.contents.type = ?', $widget->type)
-        ->where('table.contents.password IS NULL')
-        ->order('table.contents.created', Typecho_Db::SORT_ASC)
-        ->limit(1);
-    $content = $db->fetchRow($sql);
-
-    if ($content) {
-        $content = $widget->filter($content);
-        $link = '<a class="nav-link" href="' . $content['permalink'] . '" title="' . $content['title'] . '">';
-        $link .= '<div class="nav-title">' . $content['title'] . '</div><i class="i-forward"></i></a>';
-        echo $link;
-    } else {
-        echo $default;
-    }
-}
-
-/**
- * 显示上一篇
- *
- * @access public
- * @param string $default 如果没有下一篇,显示的默认文字
- * @return void
- */
-function thePrev($widget, $default = NULL)
-{
-    $db = Typecho_Db::get();
-    $sql = $db->select()->from('table.contents')
-        ->where('table.contents.created < ?', $widget->created)
-        ->where('table.contents.status = ?', 'publish')
-        ->where('table.contents.type = ?', $widget->type)
-        ->where('table.contents.password IS NULL')
-        ->order('table.contents.created', Typecho_Db::SORT_DESC)
-        ->limit(1);
-    $content = $db->fetchRow($sql);
-    if ($content) {
-        $content = $widget->filter($content);
-        $link = '<a class="nav-link" href="' . $content['permalink'] . '" title="' . $content['title'] . '"><i class="i-back"></i>';
-        $link .= '<div class="nav-title">' . $content['title'] . '</div></a>';
-        echo $link;
-    } else {
-        echo $default;
-    }
-}
-
-/**
- * ajaxComment
- * 实现Ajax评论的方法(实现feedback中的comment功能)
- * @param Widget_Archive $archive
- * @return void
+ * Ajax 评论提交
+ * 兼容 Typecho 1.3.0 + PHP 8.4
+ * 修复：直接使用上下文对象，解决 cid 丢失导致的“文章不允许评论”错误
+ * Ajax 评论提交 (含 Cookie 记忆功能)
  */
 function ajaxComment($archive)
 {
-    $options = Helper::options();
-    $user = Typecho_Widget::widget('Widget_User');
-    $db = Typecho_Db::get();
-    // Security 验证不通过时会直接跳转，所以需要自己进行判断
-    // 需要开启反垃圾保护，此时将不验证来源
-    if ($archive->request->get('_') != Helper::security()->getToken($archive->request->getReferer())) {
-        $archive->response->throwJson(array('status' => 0, 'msg' => _t('非法请求')));
-    }
-    /** 评论关闭 */
-    if (!$archive->allow('comment')) {
-        $archive->response->throwJson(array('status' => 0, 'msg' => _t('评论已关闭')));
-    }
-    /** 检查ip评论间隔 */
-    if (
-        !$user->pass('editor', true) && $archive->authorId != $user->uid &&
-        $options->commentsPostIntervalEnable
-    ) {
-        $latestComment = $db->fetchRow($db->select('created')->from('table.comments')
-            ->where('cid = ?', $archive->cid)
-            ->where('ip = ?', $archive->request->getIp())
-            ->order('created', Typecho_Db::SORT_DESC)
-            ->limit(1));
+    header('Content-Type: application/json;charset=utf-8');
 
-        if ($latestComment && ($options->gmtTime - $latestComment['created'] > 0 &&
-            $options->gmtTime - $latestComment['created'] < $options->commentsPostInterval)) {
-            $archive->response->throwJson(array('status' => 0, 'msg' => _t('对不起, 您的发言过于频繁, 请稍侯再次发布')));
+    try {
+        $options = Widget::widget('Widget_Options');
+        $user = Widget::widget('Widget_User');
+        $db = Db::get();
+
+        // 1. 检查权限
+        if (!$archive->is('single')) {
+            throw new Exception('只能在文章页面提交评论');
         }
-    }
+        $cid = $archive->cid;
+        if (!$archive->allow('comment')) {
+            throw new Exception('该文章不允许评论');
+        }
 
-    $comment = array(
-        'cid'       =>  $archive->cid,
-        'created'   =>  $options->gmtTime,
-        'agent'     =>  $archive->request->getAgent(),
-        'ip'        =>  $archive->request->getIp(),
-        'ownerId'   =>  $archive->author->uid,
-        'type'      =>  'comment',
-        'status'    =>  !$archive->allow('edit') && $options->commentsRequireModeration ? 'waiting' : 'approved'
-    );
+        // 2. 组装数据
+        $comment = [
+            'cid'       => $cid,
+            'created'   => time(),
+            'agent'     => $archive->request->getAgent(),
+            'ip'        => $archive->request->getIp(),
+            'ownerId'   => $archive->authorId,
+            'type'      => 'comment',
+            'status'    => $options->commentsRequireModeration ? 'waiting' : 'approved',
+        ];
 
-    /** 判断父节点 */
-    if ($parentId = $archive->request->filter('int')->get('parent')) {
-        if ($options->commentsThreaded && ($parent = $db->fetchRow($db->select('coid', 'cid')->from('table.comments')
-            ->where('coid = ?', $parentId))) && $archive->cid == $parent['cid']) {
-            $comment['parent'] = $parentId;
+        // 3. 获取用户输入
+        if ($user->hasLogin()) {
+            $comment['author'] = $user->screenName;
+            $comment['mail'] = $user->mail;
+            $comment['url'] = $user->url;
+            $comment['authorId'] = $user->uid;
         } else {
-            $archive->response->throwJson(array('status' => 0, 'msg' => _t('父级评论不存在')));
+            $comment['author'] = $archive->request->filter('trim')->get('author');
+            $comment['mail'] = $archive->request->filter('trim')->get('mail');
+            $comment['url'] = $archive->request->filter('trim', 'url')->get('url');
+            $comment['authorId'] = 0;
         }
-    }
-    $feedback = Typecho_Widget::widget('Widget_Feedback');
-    //检验格式
-    $validator = new Typecho_Validate();
-    $validator->addRule('author', 'required', _t('必须填写用户名'));
-    $validator->addRule('author', 'xssCheck', _t('请不要在用户名中使用特殊字符'));
-    $validator->addRule('author', array($feedback, 'requireUserLogin'), _t('您所使用的用户名已经被注册,请登录后再次提交'));
-    $validator->addRule('author', 'maxLength', _t('用户名最多包含200个字符'), 200);
+        $comment['text'] = $archive->request->get('text');
 
-    if ($options->commentsRequireMail && !$user->hasLogin()) {
-        $validator->addRule('mail', 'required', _t('必须填写电子邮箱地址'));
-    }
+        $parent = $archive->request->filter('int')->get('parent');
+        if ($parent) { $comment['parent'] = $parent; }
 
-    $validator->addRule('mail', 'email', _t('邮箱地址不合法'));
-    $validator->addRule('mail', 'maxLength', _t('电子邮箱最多包含200个字符'), 200);
+        // 4. 验证
+        $validator = new Validate();
+        $validator->addRule('author', 'required', _t('必须填写昵称'));
+        $validator->addRule('author', 'xssCheck', _t('昵称不能包含特殊字符'));
+        $validator->addRule('mail', 'required', _t('必须填写邮箱'));
+        $validator->addRule('mail', 'email', _t('请输入合法的邮箱地址'));
+        $validator->addRule('url', 'url', _t('请输入合法的网址'));
+        $validator->addRule('text', 'required', _t('必须填写评论内容'));
+        if ($error = $validator->run($comment)) {
+            throw new Exception(implode('；', $error));
+        }
 
-    if ($options->commentsRequireUrl && !$user->hasLogin()) {
-        $validator->addRule('url', 'required', _t('必须填写个人主页'));
-    }
-    $validator->addRule('url', 'url', _t('个人主页地址格式错误'));
-    $validator->addRule('url', 'maxLength', _t('个人主页地址最多包含200个字符'), 200);
+        // 5. 插入数据库
+        $insertId = $db->query($db->insert('table.comments')->rows($comment));
+        if (!$insertId) {
+            throw new Exception('评论写入数据库失败');
+        }
 
-    $validator->addRule('text', 'required', _t('必须填写评论内容'));
+        // 6. 更新统计
+        $db->query($db->update('table.contents')
+            ->expression('commentsNum', 'commentsNum + 1')
+            ->where('cid = ?', $cid));
 
-    $comment['text'] = $archive->request->text;
-
-    /** 对一般匿名访问者,将用户数据保存一个月 */
-    if (!$user->hasLogin()) {
-        /** Anti-XSS */
-        $comment['author'] = $archive->request->filter('trim')->author;
-        $comment['mail'] = $archive->request->filter('trim')->mail;
-        $comment['url'] = $archive->request->filter('trim')->url;
-
-        /** 修正用户提交的url */
-        if (!empty($comment['url'])) {
-            $urlParams = parse_url($comment['url']);
-            if (!isset($urlParams['scheme'])) {
-                $comment['url'] = 'http://' . $comment['url'];
+        // 7. 【关键步骤】写入 Cookie 记住用户信息
+        if (!$user->hasLogin()) {
+            $expire = time() + 30 * 24 * 3600;
+            $path = '/';
+            Cookie::set('__typecho_remember_author', $comment['author'], $expire, $path);
+            Cookie::set('__typecho_remember_mail', $comment['mail'], $expire, $path);
+            if (!empty($comment['url'])) {
+                Cookie::set('__typecho_remember_url', $comment['url'], $expire, $path);
             }
         }
 
-        $expire = $options->gmtTime + $options->timezone + 30 * 24 * 3600;
-        Typecho_Cookie::set('__typecho_remember_author', $comment['author'], $expire);
-        Typecho_Cookie::set('__typecho_remember_mail', $comment['mail'], $expire);
-        Typecho_Cookie::set('__typecho_remember_url', $comment['url'], $expire);
-    } else {
-        $comment['author'] = $user->screenName;
-        $comment['mail'] = $user->mail;
-        $comment['url'] = $user->url;
+        // 8. 返回结果
+        echo json_encode([
+            'status' => 1,
+            'msg'    => '评论成功',
+            'comment' => [
+                'author'  => $comment['author'],
+                'text'    => $comment['text'],
+                'avatar'  => getGravatarUrl($comment['mail'], 48, 'g', true)
+            ]
+        ]);
 
-        /** 记录登录用户的id */
-        $comment['authorId'] = $user->uid;
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 0, 'msg' => $e->getMessage()]);
     }
-
-    /** 评论者之前须有评论通过了审核 */
-    if (!$options->commentsRequireModeration && $options->commentsWhitelist) {
-        if ($feedback->size($feedback->select()->where('author = ? AND mail = ? AND status = ?', $comment['author'], $comment['mail'], 'approved'))) {
-            $comment['status'] = 'approved';
-        } else {
-            $comment['status'] = 'waiting';
-        }
-    }
-
-    if ($error = $validator->run($comment)) {
-        $archive->response->throwJson(array('status' => 0, 'msg' => implode(';', $error)));
-    }
-    //评论过程的插件接口，一般用于过滤垃圾评论的插件
-    try {
-        $comment = $feedback->pluginHandle()->comment($comment, $feedback->_content);
-    } catch (Typecho_Exception $e) {
-        Typecho_Cookie::set('__typecho_remember_text', $comment['text']);
-        $archive->response->throwJson(array('status' => 0, 'msg' => _t($e->getMessage())));
-        throw $e;
-    }
-    /** 添加评论 */
-    $commentId = $feedback->insert($comment);
-    if (!$commentId) {
-        $archive->response->throwJson(array('status' => 0, 'msg' => _t('评论失败')));
-    }
-    Typecho_Cookie::delete('__typecho_remember_text');
-    $db->fetchRow($feedback->select()->where('coid = ?', $commentId)
-        ->limit(1), array($feedback, 'push'));
-    //评论完成后的接口，一般用于评论提醒插件
-    $feedback->pluginHandle()->finishComment($feedback);
-
-    // 返回评论数据
-    $data = array(
-        'cid' => $feedback->cid,
-        'coid' => $feedback->coid,
-        'parent' => $feedback->parent,
-        'mail' => $feedback->mail,
-        'url' => $feedback->url,
-        'ip' => $feedback->ip,
-        'agent' => $feedback->agent,
-        'author' => $feedback->author,
-        'authorId' => $feedback->authorId,
-        'permalink' => $feedback->permalink,
-        'created' => $feedback->created,
-        'datetime' => $feedback->date->format('Y-m-d H:i:s'),
-        'status' => $feedback->status,
-    );
-    // 评论内容
-    ob_start();
-    $feedback->content();
-    $data['content'] = ob_get_clean();
-
-    $data['avatar'] = Typecho_Common::gravatarUrl($data['mail'], 48, Helper::options()->commentsAvatarRating, NULL, $archive->request->isSecure());
-    $archive->response->throwJson(array('status' => 1, 'comment' => $data));
+    exit;
 }

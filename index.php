@@ -1,14 +1,14 @@
 <?php
 
 /**
- * 我自己写的第一个移植主题，设计者为Sukka，因此取名Sukka
+ * Sukka 主题 - 兼容 Typecho 1.3.0 + PHP 8.4
  *
  * @package Sukka 
  * @author Mr.Seaning
  * @design Sukka
- * @version 1.0
+ * @version 2.0
  * @link http://www.seaning.com/
- * @update 2021-02-16
+ * @update 2026-07-26
  */
 ?>
 <?php

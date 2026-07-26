@@ -7,9 +7,7 @@ $this->need('header.php');
         <main class="main-col">
             <article class="card">
                 <div class="card-image thumb-post">
-
-                    <img alt="<?php $this->title() ?>>" class="thumb-img" crossorigin="" src="<?php $this->options->themeUrl("assets/img/lazyload.gif") ?>" data-original=" <?php echo thumbside($this) ?>">
-
+                    <img alt="<?php $this->title() ?>" class="thumb-img" crossorigin="" src="<?php $this->options->themeUrl("assets/img/lazyload.gif") ?>" data-original="<?php echo thumbside($this) ?>">
                 </div>
                 <header class="post-header">
                     <h1 class="post-title"><?php $this->title() ?></h1>
@@ -63,14 +61,16 @@ $this->need('header.php');
                     <?php $tags = $this->tags; ?>
                     <?php foreach ($tags as $tag) { ?>
                         <?php echo '<a class="s-tag" href="' . $tag['permalink'] . '">' . '# ' . $tag['name'] . '</a>'; ?>
-                        <?php } ?>　
+                    <?php } ?>　
 
                 </footer>
             </article>
+            <?php if ($this->options->alipayQr || $this->options->wechatQr) : ?>
             <div class="card donations">
-                <div class="donation-label">喜欢这篇文章？为什么不考虑打赏一下作者呢？ </div>
+                <div class="donation-label"><?php echo $this->options->donationText ? $this->options->donationText : '喜欢文章？打赏作者>>'; ?> </div>
                 <a id="donation-btn" class="button btn-donation">打赏</a>
             </div>
+            <?php endif; ?>
             <nav class="nav" role="navigation">
                 <div class="nav-prev">
                     <?php thePrev($this); ?>
@@ -81,11 +81,37 @@ $this->need('header.php');
             </nav>
             <div class="c-card" id="comment">
                 <?php $this->need('comments.php') ?>
-                <!-- <div class="comment-loading">评论正在适配中，有事请联系作者邮箱 seaning at seaning dot com</div> -->
             </div>
         </main>
         <?php $this->need('sidebar.php'); ?>
     </div>
 </div>
 <!--主体e-->
+
+<!--打赏弹窗s-->
+<?php if ($this->options->alipayQr || $this->options->wechatQr) : ?>
+<div class="donation-modal" id="donation-modal">
+    <div class="donation-modal-mask"></div>
+    <div class="donation-modal-box">
+        <span class="donation-modal-close" id="donation-close">&times;</span>
+        <div class="donation-modal-title">请作者喝杯咖啡 ☕</div>
+        <div class="donation-modal-content">
+            <?php if ($this->options->alipayQr) : ?>
+            <div class="donation-item">
+                <img src="<?php $this->options->alipayQr(); ?>" alt="支付宝打赏" class="donation-qr" />
+                <div class="donation-item-label">支付宝</div>
+            </div>
+            <?php endif; ?>
+            <?php if ($this->options->wechatQr) : ?>
+            <div class="donation-item">
+                <img src="<?php $this->options->wechatQr(); ?>" alt="微信打赏" class="donation-qr" />
+                <div class="donation-item-label">微信</div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+<!--打赏弹窗e-->
+
 <?php $this->need('footer.php'); ?>

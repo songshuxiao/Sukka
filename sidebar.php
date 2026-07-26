@@ -1,12 +1,12 @@
 <aside class="left-col">
     <div class="c-card widget-author">
         <div class="author-image">
-            <img alt="Seaning Avatar'" class="author-avatar" src="<?php $this->options->themeUrl('assets/img/tx.jpg'); ?>">
+            <img alt="Seaning Avatar'" class="author-avatar" src="<?php echo $this->options->avatarUrl ? $this->options->avatarUrl : $this->options->themeUrl('assets/img/tx.jpg'); ?>">
         </div>
-        <div class="mb3 title">Mr.Seaning</div>
-        <div class="mb3">一入IT深思海，从此妹子是路人</div>
+        <div class="mb3 title"><?php echo $this->options->authorName ? $this->options->authorName : 'Mr.Seaning'; ?></div>
+        <div class="mb3"><?php echo $this->options->authorDesc ? $this->options->authorDesc : '一入IT深思海，从此妹子是路人'; ?></div>
         <div class="author-level">
-            <?php Typecho_Widget::widget('Widget_Stat')->to($stat); ?>
+            <?php $this->widget('Widget_Stat')->to($stat); ?>
             <div class="author-level-item">
                 <div class="author-count"><?php $stat->publishedPostsNum() ?></div>
                 <div class="author-item">文章</div>

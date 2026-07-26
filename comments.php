@@ -12,7 +12,6 @@
 
     $commentLevelClass = $comments->levels > 0 ? ' comment-child' : ' comment-parent';
 ?>
-
     <li id="li-<?php $comments->theId(); ?>" class="comment-body<?php
                                                                 if ($comments->levels > 0) {
                                                                     echo ' comment-child';
@@ -51,7 +50,7 @@
         <?php $comments->pageNav('&laquo; 前一页', '后一页 &raquo;'); ?>
 
     <?php endif; ?>
-    <!-- 房地产法，公司法，中国法律思想史 -->
+
     <?php if ($this->allow('comment')) : ?>
         <div id="<?php $this->respondId(); ?>" class="respond">
             <div class="cancel-comment-reply">
@@ -82,6 +81,7 @@
                 </p>
                 <p>
                     <button type="submit" class="button btn-comment"><?php _e('提交评论'); ?></button>
+                    <span class="comment-ajax-tip" id="comment-ajax-tip"></span>
                 </p>
             </form>
         </div>
@@ -89,3 +89,66 @@
         <h3><?php _e('评论已关闭'); ?></h3>
     <?php endif; ?>
 </div>
+
+<script>
+// Ajax 评论提交
+(function () {
+    var form = document.getElementById('comment-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var tip = document.getElementById('comment-ajax-tip');
+        var btn = form.querySelector('.btn-comment');
+
+        var formData = new FormData(form);
+        var params = new URLSearchParams();
+        formData.forEach(function (value, key) {
+            params.append(key, value);
+        });
+        params.append('themeAction', 'comment');
+
+        btn.disabled = true;
+        btn.textContent = '提交中...';
+        if (tip) tip.textContent = '';
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params.toString()
+        })
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (data) {
+            if (data.status === 1) {
+                if (tip) {
+                    tip.style.color = '#3273dc';
+                    tip.textContent = '评论成功！';
+                }
+                // 刷新页面以显示新评论
+                setTimeout(function () {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '提交评论';
+                if (tip) {
+                    tip.style.color = '#e06c75';
+                    tip.textContent = data.msg || '评论失败';
+                }
+            }
+        })
+        .catch(function (err) {
+            btn.disabled = false;
+            btn.textContent = '提交评论';
+            if (tip) {
+                tip.style.color = '#e06c75';
+                tip.textContent = '网络错误，请重试';
+            }
+        });
+    });
+})();
+</script>
