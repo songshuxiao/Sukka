@@ -33,9 +33,7 @@ $this->need('header.php');
             </article>
 
             <div class="c-card" id="comment">
-                <?php //$this->need('comments.php'); 
-                ?>
-                <div class="comment-loading">评论正在适配中，有事请联系作者邮箱 seaning at seaning dot com</div>
+                <?php $this->need('comments.php'); ?>
             </div>
         </main>
         <?php $this->need('sidebar.php'); ?>
