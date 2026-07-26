@@ -1,6 +1,6 @@
 # Sukka
 
-个人 Typecho 主题，基于 Sukka 的设计移植。
+个人 Typecho 主题，移植自Hexo主题 [Sukka](https://blog.skk.moe/)  的设计
 
 ## 环境要求
 
@@ -72,4 +72,4 @@
 
 ### v1.0 (2021-02-16)
 
-- 初始版本
+- [初始版本](https://www.seaning.com/11.html)
