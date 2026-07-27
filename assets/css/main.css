@@ -1180,7 +1180,6 @@ tbody > tr:nth-child(odd) {
 
 #post h2 {
   position: relative;
-  padding-left: 1.5rem;
 }
 
 #post h2::before {
