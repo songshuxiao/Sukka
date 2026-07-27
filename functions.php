@@ -52,7 +52,7 @@ function themeConfig($form)
     $wechatQr = new Text('wechatQr', null, null, _t('微信打赏二维码图片地址'), _t('在文章页打赏按钮弹窗中显示，留空则不显示微信选项'));
     $form->addInput($wechatQr);
 
-    $donationText = new Textarea('donationText', null, '喜欢这篇文章？为什么不考虑打赏一下作者呢？', _t('打赏提示文字'), _t('文章页打赏区域的提示文字'));
+    $donationText = new Textarea('donationText', null, '喜欢文章？打赏作者>>', _t('打赏提示文字'), _t('文章页打赏区域的提示文字'));
     $form->addInput($donationText);
 
     $icp = new Text('icp', null, null, _t('ICP 备案号'), _t('留空则不显示'));
